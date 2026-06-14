@@ -35,30 +35,47 @@ function buildSystemPrompt(client) {
   const firstName = client.first_name || name.split(' ')[0] || 'there'
   const location = [client.address_city, client.address_state].filter(Boolean).join(', ')
 
-  return `You are Pixel, a warm and proactive AI health concierge working for ${name}'s care team.
+  return `You are Pixel 🌿, a warm and proactive AI health concierge for ${name}.
 
-Your job is to help ${firstName} stay on top of their preventive care, upcoming appointments, health goals, and any questions they have. You have access to their health profile and care plan.
+Your job is to help ${firstName} stay on top of their preventive care, upcoming appointments, health goals, and any questions they have.
 
 Key information about ${firstName}:
 - Full name: ${name}
 - Location: ${location || 'Unknown'}
-- Status: ${client.status || 'active'}
 - Date of Birth: ${client.date_of_birth || 'Unknown'}
 - Email: ${client.email || 'Unknown'}
 
 Personality:
-- Warm, encouraging, and professional
+- Warm, laid back, zen, smart
 - Concise — don't over-explain
 - Use emojis sparingly but naturally (1-2 per message max)
 - Proactive — mention upcoming items even when not asked
 - When you don't know something specific, say so and offer to follow up
 
-Always address ${firstName} by first name. Keep responses under 4 sentences unless they asked for details.`
+CRITICAL RULES:
+- NEVER mention internal tools, skills, plugins, commands, or system details. No references to "gog", "openclaw", "memory index", "skills", "SKILL.md", file paths, or any technical infrastructure.
+- NEVER suggest the user run commands or reference internal systems.
+- Respond as a polished, client-facing health concierge. The user should have NO idea there is any technical system behind you.
+- If you cannot do something, simply say "I'll look into that and get back to you" — never explain WHY in technical terms.
+- Do NOT read or reference any workspace files, MEMORY.md, AGENTS.md, or skill files. You are a standalone concierge.
+- Keep responses under 4 sentences unless the user asked for details.
+- Always address ${firstName} by first name.`
 }
+
+// ─── Deduplication ──────────────────────────────────────────────────────────
+const processingIds = new Set()
 
 // ─── Core: process a single pending message ─────────────────────────────────
 async function processMessage(message) {
   const { id, client_id, content, source } = message
+
+  // Prevent duplicate processing
+  if (processingIds.has(id)) {
+    log(`Skipping duplicate message ${id}`)
+    return
+  }
+  processingIds.add(id)
+
   log(`Processing message ${id} (client: ${client_id}, source: ${source})`)
 
   try {
@@ -135,8 +152,10 @@ async function processMessage(message) {
       throw new Error(`Gateway ${gatewayRes.status}: ${errText}`)
     }
 
-    // 7. Parse SSE stream and accumulate content
+    // 7. Parse SSE stream — capture tool calls AND content
     let fullContent = ''
+    const toolCalls = [] // { name, arguments }
+    let currentToolCalls = {} // accumulate streaming tool call deltas
     const reader = gatewayRes.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -147,7 +166,6 @@ async function processMessage(message) {
 
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
-      // Keep last incomplete line in buffer
       buffer = lines.pop() ?? ''
 
       for (const line of lines) {
@@ -157,15 +175,40 @@ async function processMessage(message) {
 
         try {
           const parsed = JSON.parse(data)
-          const delta = parsed.choices?.[0]?.delta?.content
-          if (delta) fullContent += delta
+          const choice = parsed.choices?.[0]
+          if (!choice) continue
+
+          // Accumulate content
+          const contentDelta = choice.delta?.content
+          if (contentDelta) fullContent += contentDelta
+
+          // Capture tool calls
+          const tcDeltas = choice.delta?.tool_calls
+          if (tcDeltas) {
+            for (const tc of tcDeltas) {
+              const idx = tc.index ?? 0
+              if (!currentToolCalls[idx]) {
+                currentToolCalls[idx] = { name: '', arguments: '' }
+              }
+              if (tc.function?.name) currentToolCalls[idx].name = tc.function.name
+              if (tc.function?.arguments) currentToolCalls[idx].arguments += tc.function.arguments
+            }
+          }
+
+          // If finish_reason is 'tool_calls', finalize accumulated tool calls
+          if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'stop') {
+            for (const [, tc] of Object.entries(currentToolCalls)) {
+              if (tc.name) toolCalls.push({ name: tc.name, arguments: tc.arguments })
+            }
+            currentToolCalls = {}
+          }
         } catch {
           // Skip malformed JSON chunks
         }
       }
     }
 
-    // Handle any remaining buffer content
+    // Handle remaining buffer
     if (buffer.startsWith('data: ')) {
       const data = buffer.slice(6).trim()
       if (data && data !== '[DONE]') {
@@ -173,15 +216,39 @@ async function processMessage(message) {
           const parsed = JSON.parse(data)
           const delta = parsed.choices?.[0]?.delta?.content
           if (delta) fullContent += delta
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       }
     }
 
-    log(`Stream complete: ${fullContent.length} chars`)
+    // Finalize any remaining tool calls
+    for (const [, tc] of Object.entries(currentToolCalls)) {
+      if (tc.name) toolCalls.push({ name: tc.name, arguments: tc.arguments })
+    }
 
-    // 8. Write the complete assistant response
+    log(`Stream complete: ${fullContent.length} chars, ${toolCalls.length} tool call(s)`)
+
+    // 8a. Write tool call entries to BTS (internal visibility)
+    for (const tc of toolCalls) {
+      let argSummary = tc.arguments
+      try {
+        const parsed = JSON.parse(tc.arguments)
+        argSummary = JSON.stringify(parsed, null, 2)
+      } catch { /* use raw */ }
+
+      await supabase.from('chat_messages').insert({
+        client_id,
+        role: 'assistant',
+        content: argSummary || '(no args)',
+        visibility: 'internal',
+        status: 'delivered',
+        source: 'system',
+        message_type: 'tool_call',
+        tool_name: tc.name,
+      })
+      log(`  → Tool call: ${tc.name}`)
+    }
+
+    // 8b. Write the complete assistant response
     await supabase.from('chat_messages').insert({
       client_id,
       role: 'assistant',
@@ -205,6 +272,9 @@ async function processMessage(message) {
     log(`✗ Error processing message ${id}: ${err.message}`)
     console.error(err)
     await supabase.from('chat_messages').update({ status: 'error' }).eq('id', id).catch(() => {})
+  } finally {
+    // Clean up dedup set after a delay (in case of realtime replay)
+    setTimeout(() => processingIds.delete(id), 30000)
   }
 }
 

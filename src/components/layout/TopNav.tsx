@@ -1,13 +1,34 @@
 'use client'
 
+import { useState, useEffect, useMemo } from 'react'
 import ViewToggle from './ViewToggle'
-import ClientSwitcher from '@/components/client/ClientSwitcher'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 export default function TopNav() {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
+  const [userName, setUserName] = useState('')
+
+  useEffect(() => {
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.user_metadata?.full_name) {
+        setUserName(user.user_metadata.full_name)
+      } else if (user?.email) {
+        setUserName(user.email.split('@')[0])
+      }
+    }
+    getUser()
+  }, [supabase])
+
+  const initials = userName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || '?'
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -30,9 +51,16 @@ export default function TopNav() {
       {/* Center: View toggle */}
       <ViewToggle />
 
-      {/* Right: Client switcher + sign out */}
+      {/* Right: User info + sign out */}
       <div className="flex items-center gap-3">
-        <ClientSwitcher />
+        {userName && (
+          <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/50 rounded-xl px-3 py-1.5">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-[10px] font-bold text-white">
+              {initials}
+            </div>
+            <span className="text-sm text-white font-medium">{userName}</span>
+          </div>
+        )}
         <button
           onClick={handleSignOut}
           className="text-gray-400 hover:text-white text-xs px-3 py-1.5 rounded-lg hover:bg-gray-800 transition"

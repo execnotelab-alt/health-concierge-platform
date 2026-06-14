@@ -113,15 +113,16 @@ export default function RulesList() {
               <div className="flex-shrink-0 mt-0.5">
                 <button
                   onClick={() => toggleRule(rule.id)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    rule.enabled ? 'bg-violet-600' : 'bg-gray-700'
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                    rule.enabled ? 'bg-violet-600' : 'bg-gray-600'
                   }`}
+                  role="switch"
+                  aria-checked={rule.enabled}
                 >
                   <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                      rule.enabled ? 'translate-x-4.5' : 'translate-x-0.5'
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                      rule.enabled ? 'translate-x-[22px]' : 'translate-x-[3px]'
                     }`}
-                    style={{ transform: rule.enabled ? 'translateX(18px)' : 'translateX(2px)' }}
                   />
                 </button>
               </div>

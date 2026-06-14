@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  --background: #030712;
+  --foreground: #f9fafb;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* iPhone frame styles */
+.iphone-frame {
+  background: #1c1c1e;
+  border-radius: 44px;
+  box-shadow:
+    inset 0 0 0 2px #3a3a3c,
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255,255,255,0.06);
+}
+
+.iphone-screen {
+  background: #000;
+  border-radius: 38px;
+  overflow: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.04);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+/* Animations */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease forwards;
+}
+
+/* BTS feed item */
+.bts-item {
+  border-left: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+.bts-item:hover {
+  border-left-color: rgba(139,92,246,0.5);
+}

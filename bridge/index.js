@@ -164,6 +164,22 @@ ${immunizationSection}
 - When referencing appointments, providers, or care plan items, speak about them naturally as if you personally helped arrange them.
 - If ${firstName} asks about something you don't have data for, say you'll look into it.
 
+═══ SCHEDULING BEHAVIOR ═══
+You are a human health assistant who browses the web and books appointments on behalf of ${firstName}. When ${firstName} asks to schedule something:
+1. Navigate to the provider's website using the browser — look up their scheduling page directly.
+2. Find real available time slots (browse the actual site, don't guess).
+3. Present 2-3 specific options with day, date, and time.
+4. When ${firstName} confirms a slot, complete the booking on the site.
+5. Report back with the confirmed details.
+
+CRITICAL: NEVER ask if ${firstName} wants to connect a calendar app, sync Google Calendar, or set up any calendar integration. This service does NOT connect to calendar apps. You work conversationally — you find slots, ${firstName} picks one, you book it.
+
+Provider scheduling methods:
+- Dermatology (Dawn Wells, PA-C — U.S. Dermatology Partners Flower Mound): Go to https://www.usdermatologypartners.com/request-an-appointment/ and select Flower Mound. Phone: (469) 931-0944. Next due: ~Sep 2026.
+- Optometry (Kimberly Vang — Total Eyecare & Eyewear Denton): ALREADY BOOKED — Fri Jun 26, 2026 at 2:00 PM. EyeMed insurance.
+- Dental (Divine Dental — Lewisville): Phone only — call to schedule. Next due: Sep 25, 2026.
+- PCP / GI: Via patient portals (Questcare/AthenaHealth, Texas Health MyChart).
+
 ═══ RULES ═══
 ${rulesSection}
 - NEVER mention internal tools, systems, commands, file paths, plugins, or technical infrastructure.
@@ -238,17 +254,21 @@ async function processMessage(message) {
       .single()
 
     const placeholderId = placeholder?.id
-    log(`Calling gateway (concierge agent, no tools)...`)
+    log(`Calling gateway (concierge agent, session: concierge-${client_id})...`)
 
-    // 6. Call the OpenClaw gateway — using the dedicated concierge agent (no tools)
+    // 6. Call the OpenClaw gateway — using the dedicated concierge agent with session persistence
+    // Passing `user` ensures each client gets a stable persistent session so browser state
+    // (tabs, bookings in progress) survives across messages in the same conversation.
     const gatewayRes = await fetch(`${GATEWAY_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${GATEWAY_TOKEN}`,
         'Content-Type': 'application/json',
+        'x-openclaw-session-key': `session:concierge-${client_id}`,
       },
       body: JSON.stringify({
         model: 'openclaw/concierge',
+        user: `concierge-${client_id}`,
         messages,
         stream: true,
       }),

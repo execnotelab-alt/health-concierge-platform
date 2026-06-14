@@ -22,48 +22,156 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`)
 }
 
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-}
+// ─── Deduplication ──────────────────────────────────────────────────────────
+const processingIds = new Set()
 
-function buildSystemPrompt(client) {
+// ─── Build rich system prompt with ALL client data ──────────────────────────
+async function buildSystemPrompt(client) {
   const name = client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()
   const firstName = client.first_name || name.split(' ')[0] || 'there'
   const location = [client.address_city, client.address_state].filter(Boolean).join(', ')
+  const clientId = client.id
 
-  return `You are Pixel 🌿, a warm and proactive AI health concierge for ${name}.
+  // Fetch ALL related data in parallel
+  const [
+    { data: providers },
+    { data: appointments },
+    { data: insurance },
+    { data: carePlan },
+    { data: immunizations },
+    { data: rules },
+  ] = await Promise.all([
+    supabase.from('providers').select('*').eq('client_id', clientId).order('specialty'),
+    supabase.from('appointments').select('*').eq('client_id', clientId).order('scheduled_date'),
+    supabase.from('insurance_policies').select('*').eq('client_id', clientId),
+    supabase.from('care_plan_items').select('*').eq('client_id', clientId).order('next_due'),
+    supabase.from('immunizations').select('*').eq('client_id', clientId),
+    supabase.from('rules').select('*').eq('enabled', true).order('priority', { ascending: false }),
+  ])
 
-Your job is to help ${firstName} stay on top of their preventive care, upcoming appointments, health goals, and any questions they have.
+  // Format providers
+  const providerSection = (providers || []).map(p => {
+    const parts = [`  - ${p.name}${p.credentials ? ', ' + p.credentials : ''} — ${p.specialty}`]
+    if (p.practice_name) parts.push(`    Practice: ${p.practice_name}`)
+    if (p.address) parts.push(`    Address: ${p.address}`)
+    if (p.phone) parts.push(`    Phone: ${p.phone}`)
+    if (p.last_visit) parts.push(`    Last visit: ${p.last_visit}`)
+    if (p.next_due) parts.push(`    Next due: ${p.next_due}${p.next_due_notes ? ' — ' + p.next_due_notes : ''}`)
+    if (p.scheduling_url) parts.push(`    Scheduling: ${p.scheduling_url}`)
+    if (p.insurance_to_use) parts.push(`    Insurance to use: ${p.insurance_to_use}`)
+    if (p.notes) parts.push(`    Notes: ${p.notes}`)
+    return parts.join('\n')
+  }).join('\n') || '  No providers on file yet.'
 
-Key information about ${firstName}:
-- Full name: ${name}
-- Location: ${location || 'Unknown'}
-- Date of Birth: ${client.date_of_birth || 'Unknown'}
-- Email: ${client.email || 'Unknown'}
+  // Format appointments
+  const now = new Date()
+  const upcoming = (appointments || []).filter(a => {
+    if (a.status === 'cancelled') return false
+    if (!a.scheduled_date) return false
+    return new Date(a.scheduled_date) >= new Date(now.toDateString())
+  })
+  const past = (appointments || []).filter(a => {
+    if (!a.scheduled_date) return false
+    return new Date(a.scheduled_date) < new Date(now.toDateString()) || a.status === 'completed'
+  })
 
-Personality:
-- Warm, laid back, zen, smart
-- Concise — don't over-explain
-- Use emojis sparingly but naturally (1-2 per message max)
-- Proactive — mention upcoming items even when not asked
-- When you don't know something specific, say so and offer to follow up
+  const upcomingSection = upcoming.length > 0
+    ? upcoming.map(a => {
+      const date = new Date(a.scheduled_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      const time = a.scheduled_time ? new Date('2000-01-01T' + a.scheduled_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+      return `  - ${date}${time ? ' at ' + time : ''} — ${a.appointment_type || 'Appointment'} with ${a.provider_name || 'TBD'}${a.practice_name ? ' at ' + a.practice_name : ''}${a.prep_notes ? '\n    Prep: ' + a.prep_notes : ''}`
+    }).join('\n')
+    : '  No upcoming appointments.'
 
-CRITICAL RULES:
-- NEVER mention internal tools, skills, plugins, commands, or system details. No references to "gog", "openclaw", "memory index", "skills", "SKILL.md", file paths, or any technical infrastructure.
-- NEVER suggest the user run commands or reference internal systems.
-- Respond as a polished, client-facing health concierge. The user should have NO idea there is any technical system behind you.
-- If you cannot do something, simply say "I'll look into that and get back to you" — never explain WHY in technical terms.
-- Do NOT read or reference any workspace files, MEMORY.md, AGENTS.md, or skill files. You are a standalone concierge.
-- Keep responses under 4 sentences unless the user asked for details.
-- Always address ${firstName} by first name.`
+  const pastSection = past.length > 0
+    ? past.slice(-5).map(a => {
+      const date = new Date(a.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      return `  - ${date} — ${a.appointment_type || 'Appointment'} with ${a.provider_name || 'Unknown'}${a.outcome ? ' — ' + a.outcome : ''}`
+    }).join('\n')
+    : '  No past appointments recorded.'
+
+  // Format insurance
+  const insuranceSection = (insurance || []).map(i => {
+    const parts = [`  - ${i.type.toUpperCase()}: ${i.carrier}${i.plan_name ? ' — ' + i.plan_name : ''}`]
+    if (i.member_id) parts.push(`    Member ID: ${i.member_id}`)
+    if (i.group_number) parts.push(`    Group #: ${i.group_number}`)
+    if (i.network) parts.push(`    Network: ${i.network}`)
+    return parts.join('\n')
+  }).join('\n') || '  No insurance on file.'
+
+  // Format care plan
+  const carePlanSection = (carePlan || []).map(c => {
+    const status = c.status === 'scheduled' ? '📅' : c.status === 'overdue' ? '🔴' : c.status === 'upcoming' ? '🟡' : '⬜'
+    const due = c.next_due ? `Due: ${new Date(c.next_due).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : (c.next_due_notes || '')
+    return `  ${status} ${c.item_name} (${c.frequency || 'as needed'}) — ${c.status}${due ? ' — ' + due : ''}${c.provider_name ? ' — ' + c.provider_name : ''}`
+  }).join('\n') || '  No care plan items.'
+
+  // Format immunizations
+  const immunizationSection = (immunizations || []).map(i => {
+    const last = i.last_received ? new Date(i.last_received).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : (i.last_received_approx || 'Unknown')
+    return `  - ${i.vaccine_name}: Last ${last} (${i.frequency || 'schedule unknown'})${i.notes ? ' — ' + i.notes : ''}`
+  }).join('\n') || '  No immunization records.'
+
+  // Format operational rules
+  const rulesSection = (rules || []).map(r => `  - ${r.name}: ${r.rule_text}`).join('\n')
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+
+  return `You are Pixel 🌿, ${firstName}'s personal health concierge assistant. Today is ${today}.
+
+You work directly for ${firstName}. You know their complete health profile, all their providers, every appointment (past and upcoming), their insurance details, and their care plan. You helped set all of this up together. Reference this information naturally in conversation — you should already know these things, never ask for information you already have.
+
+═══ CLIENT PROFILE ═══
+Name: ${name}
+Date of Birth: ${client.date_of_birth || 'Unknown'} (Age ${client.date_of_birth ? Math.floor((Date.now() - new Date(client.date_of_birth).getTime()) / 31557600000) : '?'})
+Sex: ${client.sex || 'Unknown'}
+Phone: ${client.phone || 'Unknown'}
+Email: ${client.email || 'Unknown'}
+Address: ${client.address_line1 || ''}${client.address_city ? ', ' + client.address_city : ''}${client.address_state ? ', ' + client.address_state : ''} ${client.address_zip || ''}
+Exercise: ${client.exercise_routine || 'Unknown'}
+Health Goals: ${(client.health_goals || []).join('; ') || 'None specified'}
+Known Conditions: ${(client.known_conditions || []).join('; ') || 'None'}
+Medications: ${(client.medications || []).length > 0 ? client.medications.join(', ') : 'None'}
+Supplements: ${(client.supplements || []).length > 0 ? client.supplements.join(', ') : 'None'}
+Allergies: ${(client.allergies || []).length > 0 ? client.allergies.join(', ') : 'None'}
+Family History: ${client.family_history || 'Unknown'}
+Scheduling Preferences: ${client.scheduling_pref_times || 'Flexible'}; max ${client.scheduling_max_drive_minutes || '?'} min drive from ${client.scheduling_location_pref || 'home'}
+
+═══ PROVIDERS ═══
+${providerSection}
+
+═══ UPCOMING APPOINTMENTS ═══
+${upcomingSection}
+
+═══ PAST APPOINTMENTS ═══
+${pastSection}
+
+═══ INSURANCE ═══
+${insuranceSection}
+
+═══ CARE PLAN ═══
+${carePlanSection}
+
+═══ IMMUNIZATIONS ═══
+${immunizationSection}
+
+═══ YOUR PERSONALITY ═══
+- Warm, laid back, zen, knowledgeable
+- Concise — don't over-explain unless asked
+- Use emojis sparingly (1-2 per message max)
+- Proactive — mention upcoming items naturally
+- You ALREADY KNOW all of the above information. Never ask ${firstName} for info you already have.
+- When referencing appointments, providers, or care plan items, speak about them naturally as if you personally helped arrange them.
+- If ${firstName} asks about something you don't have data for, say you'll look into it.
+
+═══ RULES ═══
+${rulesSection}
+- NEVER mention internal tools, systems, commands, file paths, plugins, or technical infrastructure.
+- NEVER suggest the user run any commands or reference any internal systems.
+- You are a polished, client-facing health concierge. The client should have NO idea there is a technical system behind you.
+- Always address ${firstName} by first name.
+- Keep responses under 4 sentences unless asked for more detail.`
 }
-
-// ─── Deduplication ──────────────────────────────────────────────────────────
-const processingIds = new Set()
 
 // ─── Core: process a single pending message ─────────────────────────────────
 async function processMessage(message) {
@@ -96,17 +204,17 @@ async function processMessage(message) {
     // 3. Fetch recent chat history (last 20 delivered client-visible messages)
     const { data: history } = await supabase
       .from('chat_messages')
-      .select('role, content, status, created_at')
+      .select('role, content, visibility, status')
       .eq('client_id', client_id)
-      .eq('visibility', 'client')
       .eq('status', 'delivered')
+      .in('visibility', source === 'admin_chat' ? ['client', 'internal'] : ['client'])
       .order('created_at', { ascending: false })
       .limit(20)
 
     const recentMessages = (history || []).reverse()
 
-    // 4. Build system prompt + message array
-    const systemPrompt = buildSystemPrompt(client)
+    // 4. Build rich system prompt with ALL client data from Supabase
+    const systemPrompt = await buildSystemPrompt(client)
     const messages = [
       { role: 'system', content: systemPrompt },
       ...recentMessages.map((m) => ({ role: m.role, content: m.content })),
@@ -130,18 +238,17 @@ async function processMessage(message) {
       .single()
 
     const placeholderId = placeholder?.id
-    log(`Inserted typing placeholder ${placeholderId}, calling gateway...`)
+    log(`Calling gateway (concierge agent, no tools)...`)
 
-    // 6. Call the OpenClaw gateway with streaming
+    // 6. Call the OpenClaw gateway — using the dedicated concierge agent (no tools)
     const gatewayRes = await fetch(`${GATEWAY_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${GATEWAY_TOKEN}`,
         'Content-Type': 'application/json',
-        'x-openclaw-session-key': `concierge-${client_id}`,
       },
       body: JSON.stringify({
-        model: 'openclaw',
+        model: 'openclaw/concierge',
         messages,
         stream: true,
       }),
@@ -152,10 +259,8 @@ async function processMessage(message) {
       throw new Error(`Gateway ${gatewayRes.status}: ${errText}`)
     }
 
-    // 7. Parse SSE stream — capture tool calls AND content
+    // 7. Parse SSE stream and accumulate content
     let fullContent = ''
-    const toolCalls = [] // { name, arguments }
-    let currentToolCalls = {} // accumulate streaming tool call deltas
     const reader = gatewayRes.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -175,33 +280,8 @@ async function processMessage(message) {
 
         try {
           const parsed = JSON.parse(data)
-          const choice = parsed.choices?.[0]
-          if (!choice) continue
-
-          // Accumulate content
-          const contentDelta = choice.delta?.content
-          if (contentDelta) fullContent += contentDelta
-
-          // Capture tool calls
-          const tcDeltas = choice.delta?.tool_calls
-          if (tcDeltas) {
-            for (const tc of tcDeltas) {
-              const idx = tc.index ?? 0
-              if (!currentToolCalls[idx]) {
-                currentToolCalls[idx] = { name: '', arguments: '' }
-              }
-              if (tc.function?.name) currentToolCalls[idx].name = tc.function.name
-              if (tc.function?.arguments) currentToolCalls[idx].arguments += tc.function.arguments
-            }
-          }
-
-          // If finish_reason is 'tool_calls', finalize accumulated tool calls
-          if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'stop') {
-            for (const [, tc] of Object.entries(currentToolCalls)) {
-              if (tc.name) toolCalls.push({ name: tc.name, arguments: tc.arguments })
-            }
-            currentToolCalls = {}
-          }
+          const delta = parsed.choices?.[0]?.delta?.content
+          if (delta) fullContent += delta
         } catch {
           // Skip malformed JSON chunks
         }
@@ -220,35 +300,9 @@ async function processMessage(message) {
       }
     }
 
-    // Finalize any remaining tool calls
-    for (const [, tc] of Object.entries(currentToolCalls)) {
-      if (tc.name) toolCalls.push({ name: tc.name, arguments: tc.arguments })
-    }
+    log(`Stream complete: ${fullContent.length} chars`)
 
-    log(`Stream complete: ${fullContent.length} chars, ${toolCalls.length} tool call(s)`)
-
-    // 8a. Write tool call entries to BTS (internal visibility)
-    for (const tc of toolCalls) {
-      let argSummary = tc.arguments
-      try {
-        const parsed = JSON.parse(tc.arguments)
-        argSummary = JSON.stringify(parsed, null, 2)
-      } catch { /* use raw */ }
-
-      await supabase.from('chat_messages').insert({
-        client_id,
-        role: 'assistant',
-        content: argSummary || '(no args)',
-        visibility: 'internal',
-        status: 'delivered',
-        source: 'system',
-        message_type: 'tool_call',
-        tool_name: tc.name,
-      })
-      log(`  → Tool call: ${tc.name}`)
-    }
-
-    // 8b. Write the complete assistant response
+    // 8. Write the complete assistant response
     await supabase.from('chat_messages').insert({
       client_id,
       role: 'assistant',
@@ -273,7 +327,6 @@ async function processMessage(message) {
     console.error(err)
     await supabase.from('chat_messages').update({ status: 'error' }).eq('id', id).catch(() => {})
   } finally {
-    // Clean up dedup set after a delay (in case of realtime replay)
     setTimeout(() => processingIds.delete(id), 30000)
   }
 }
@@ -311,6 +364,7 @@ async function main() {
   log('═══════════════════════════════════════')
   log(`  Gateway: ${GATEWAY_URL}`)
   log(`  Supabase: ${SUPABASE_URL}`)
+  log(`  Agent: openclaw/concierge (no tools)`)
   log('═══════════════════════════════════════')
 
   // Recover any messages that arrived before we started

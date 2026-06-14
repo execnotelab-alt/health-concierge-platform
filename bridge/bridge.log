@@ -12,3 +12,10 @@
 [2026-06-14T21:46:19.556Z] Inserted typing placeholder 29deaf0d-3dd7-4876-b985-63c7aad2d9cc, calling gateway...
 [2026-06-14T21:46:33.128Z] Stream complete: 333 chars
 [2026-06-14T21:46:33.514Z] ✓ Delivered response for message bb77aaf7-5540-4956-80b9-16a2dea2c3e2
+[2026-06-14T21:56:02.068Z] Processing message 87bce24c-1a42-4184-ae57-b29c7f72a518 (client: 60bff668-1332-4b71-b21c-fd5127f849fb, source: client_chat)
+[2026-06-14T21:56:02.525Z] Inserted typing placeholder ee153165-8c32-4707-b4f1-ebc9b00b5360, calling gateway...
+[2026-06-14T21:56:19.592Z] Stream complete: 324 chars
+[2026-06-14T21:56:19.979Z] ✓ Delivered response for message 87bce24c-1a42-4184-ae57-b29c7f72a518
+[2026-06-14T22:03:07.340Z] 
+Received SIGTERM. Shutting down gracefully...
+[2026-06-14T22:03:07.341Z] Realtime subscription: CLOSED

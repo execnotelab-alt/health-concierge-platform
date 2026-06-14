@@ -90,7 +90,7 @@ const STATUS_DOTS = {
   overdue: 'bg-orange-400',
 }
 
-export default function AppointmentList() {
+export default function AppointmentList({ clientId }: { clientId?: string | null }) {
   return (
     <div className="p-4 space-y-4">
       {/* Upcoming */}

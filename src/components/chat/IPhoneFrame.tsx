@@ -1,85 +1,34 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useRef, useEffect } from 'react'
 import ChatBubble from './ChatBubble'
 import ChatInput from './ChatInput'
+import { useChat } from '@/lib/hooks/useChat'
 
-type Message = {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
+type Props = {
+  clientId: string | null
+  clientName?: string
+  clientLocation?: string
 }
 
-const DEMO_MESSAGES: Message[] = [
-  {
-    id: '1',
-    role: 'assistant',
-    content: "Hey Leon! 👋 I'm Pixel, your health concierge. I've got your care plan loaded and everything looks on track.\n\nQuick heads-up: your eye exam with Kimberly Vang is coming up this **Friday Jun 26 at 2:00 PM** at Total Eyecare Denton. Ready for it?",
-    timestamp: '9:41 AM',
-  },
-  {
-    id: '2',
-    role: 'user',
-    content: "Yes! Thanks for the reminder. Do I need to bring anything?",
-    timestamp: '9:42 AM',
-  },
-  {
-    id: '3',
-    role: 'assistant',
-    content: "Perfect! Here's what to bring:\n\n• Your EyeMed insurance card (Member ID 256797197)\n• Any current glasses or contacts\n• List of questions if you have any\n\nThey're at 3111 Unicorn Lake Blvd, Ste 100, Denton. I've got them on file. See you on the other side! 👁️✨",
-    timestamp: '9:42 AM',
-  },
-  {
-    id: '4',
-    role: 'user',
-    content: "What's coming up after that?",
-    timestamp: '9:45 AM',
-  },
-  {
-    id: '5',
-    role: 'assistant',
-    content: "After your eye exam, here's the queue:\n\n📅 **Sep 25** — Dental cleaning at Divine Dental (Lewisville) @ 2:30 PM\n\n📅 **~Sep 2026** — Annual physical with Dr. Jimenez-Lawson + full-body skin check with Dawn Wells PA-C\n\nI'll start reaching out about the derm and PCP appointments in August so we're ahead of it. You're in good shape! 💪",
-    timestamp: '9:45 AM',
-  },
-]
+function formatTimestamp(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
 
-export default function IPhoneFrame() {
-  const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES)
-  const [inputValue, setInputValue] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
+export default function IPhoneFrame({ clientId, clientName = 'Client', clientLocation = '' }: Props) {
+  const { messages, sendMessage, isProcessing } = useChat(clientId, 'client')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
   const now = new Date()
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false })
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping])
+  }, [messages, isProcessing])
 
-  function handleSend(text: string) {
-    if (!text.trim()) return
-
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text,
-      timestamp: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-    }
-    setMessages((prev) => [...prev, userMsg])
-    setInputValue('')
-    setIsTyping(true)
-
-    // Simulate Pixel response
-    setTimeout(() => {
-      const pixelMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: "Got it! I'm on it 🌿 Let me check your records and get back to you shortly.",
-        timestamp: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      }
-      setMessages((prev) => [...prev, pixelMsg])
-      setIsTyping(false)
-    }, 1800)
+  async function handleSend(text: string) {
+    if (!text.trim() || !clientId) return
+    await sendMessage(text)
   }
 
   return (
@@ -107,10 +56,7 @@ export default function IPhoneFrame() {
         {/* Screen */}
         <div
           className="iphone-screen relative overflow-hidden bg-black"
-          style={{
-            borderRadius: '38px',
-            height: '600px',
-          }}
+          style={{ borderRadius: '38px', height: '600px' }}
         >
           {/* Dynamic Island */}
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
@@ -129,17 +75,14 @@ export default function IPhoneFrame() {
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 pt-2" style={{ height: '52px' }}>
             <span className="text-white text-xs font-semibold" style={{ paddingTop: '8px' }}>{timeStr}</span>
             <div className="flex items-center gap-1 pt-2">
-              {/* Signal */}
               <div className="flex items-end gap-[2px] h-3">
                 {[3, 5, 7, 9].map((h, i) => (
                   <div key={i} className="w-[3px] bg-white rounded-sm" style={{ height: `${h}px` }} />
                 ))}
               </div>
-              {/* WiFi */}
               <svg width="15" height="12" viewBox="0 0 15 12" className="text-white fill-current ml-1">
                 <path d="M7.5 9.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0-3.5c1.1 0 2.1.45 2.83 1.17l1.06-1.06A5.5 5.5 0 0 0 7.5 4.5a5.5 5.5 0 0 0-3.89 1.61l1.06 1.06A3.5 3.5 0 0 1 7.5 6zm0-3.5c2.2 0 4.19.89 5.63 2.34l1.07-1.07A8.5 8.5 0 0 0 7.5 1a8.5 8.5 0 0 0-6.7 3.27l1.07 1.07A6.5 6.5 0 0 1 7.5 2.5z"/>
               </svg>
-              {/* Battery */}
               <div className="relative flex items-center ml-1">
                 <div className="w-[22px] h-[11px] rounded-[3px] border border-white/70 relative">
                   <div className="absolute inset-[1.5px] right-[1.5px] bg-white rounded-[1.5px]" style={{ right: '3px' }} />
@@ -174,11 +117,22 @@ export default function IPhoneFrame() {
             style={{ top: '108px', bottom: '60px', padding: '12px 10px' }}
           >
             <div className="space-y-2">
+              {messages.length === 0 && !clientId && (
+                <div className="text-center text-gray-600 text-xs pt-8">Select a client to start chatting</div>
+              )}
               {messages.map((msg) => (
-                <ChatBubble key={msg.id} message={msg} />
+                <ChatBubble
+                  key={msg.id}
+                  message={{
+                    id: msg.id,
+                    role: msg.role as 'user' | 'assistant',
+                    content: msg.content,
+                    timestamp: formatTimestamp(msg.created_at),
+                  }}
+                />
               ))}
 
-              {isTyping && (
+              {isProcessing && (
                 <div className="flex items-end gap-1.5 animate-slide-up">
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-xs flex-shrink-0">
                     🌿
@@ -189,9 +143,7 @@ export default function IPhoneFrame() {
                         <div
                           key={i}
                           className="w-1.5 h-1.5 rounded-full bg-gray-400"
-                          style={{
-                            animation: `pulse-dot 1.2s ease-in-out ${i * 0.2}s infinite`,
-                          }}
+                          style={{ animation: `pulse-dot 1.2s ease-in-out ${i * 0.2}s infinite` }}
                         />
                       ))}
                     </div>
@@ -212,19 +164,15 @@ export default function IPhoneFrame() {
               paddingBottom: '8px',
             }}
           >
-            <ChatInput
-              value={inputValue}
-              onChange={setInputValue}
-              onSend={handleSend}
-            />
+            <ChatInput onSend={handleSend} loading={isProcessing} />
           </div>
         </div>
       </div>
 
       {/* Label below */}
       <div className="mt-4 text-center">
-        <div className="text-xs text-gray-500 font-medium">Leon Kosker</div>
-        <div className="text-[10px] text-gray-600 mt-0.5">Active client • Denton, TX</div>
+        <div className="text-xs text-gray-500 font-medium">{clientName}</div>
+        {clientLocation && <div className="text-[10px] text-gray-600 mt-0.5">Active client • {clientLocation}</div>}
       </div>
     </div>
   )

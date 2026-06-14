@@ -89,7 +89,7 @@ const STATUS_STYLES = {
   future: { dot: 'bg-blue-400', badge: 'bg-blue-500/20 text-blue-300', label: '🔮 Future' },
 }
 
-export default function CarePlan() {
+export default function CarePlan({ clientId }: { clientId?: string | null }) {
   return (
     <div className="p-4 space-y-4">
       {/* Active care items */}

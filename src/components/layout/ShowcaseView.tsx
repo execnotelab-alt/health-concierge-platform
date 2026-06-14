@@ -8,12 +8,23 @@ import InsuranceCard from '@/components/client/InsuranceCard'
 import ProviderList from '@/components/client/ProviderList'
 import AppointmentList from '@/components/client/AppointmentList'
 import CarePlan from '@/components/client/CarePlan'
+import ClientSwitcher from '@/components/client/ClientSwitcher'
+import { useClient } from '@/lib/hooks/useClient'
 
 type Tab = 'profile' | 'insurance' | 'providers' | 'appointments' | 'careplan'
 
 export default function ShowcaseView() {
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const [infoPanelOpen, setInfoPanelOpen] = useState(true)
+  const { clients, selectedClient, setSelectedClient } = useClient()
+
+  const clientId = selectedClient?.id ?? null
+  const clientName = selectedClient
+    ? `${selectedClient.first_name} ${selectedClient.last_name}`
+    : 'No client'
+  const clientLocation = selectedClient
+    ? [selectedClient.address_city, selectedClient.address_state].filter(Boolean).join(', ')
+    : ''
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'profile', label: 'Profile', icon: '👤' },
@@ -27,7 +38,7 @@ export default function ShowcaseView() {
     <div className="flex h-[calc(100vh-57px)] overflow-hidden">
       {/* Left: iPhone Frame (~1/3) */}
       <div className="w-[380px] flex-shrink-0 flex items-center justify-center py-6 px-4 bg-gray-950/50 border-r border-gray-800/50">
-        <IPhoneFrame />
+        <IPhoneFrame clientId={clientId} clientName={clientName} clientLocation={clientLocation} />
       </div>
 
       {/* Right: BTS + Info Panel (~2/3) */}
@@ -35,10 +46,18 @@ export default function ShowcaseView() {
         {/* BTS feed */}
         <div className={`flex-1 overflow-hidden flex flex-col ${infoPanelOpen ? '' : 'flex-1'}`}>
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800/60">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-              <span className="text-sm font-semibold text-white">Behind the Scenes</span>
-              <span className="text-xs text-gray-500">— AI work feed</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+                <span className="text-sm font-semibold text-white">Behind the Scenes</span>
+                <span className="text-xs text-gray-500">— AI work feed</span>
+              </div>
+              {/* Client switcher in BTS header */}
+              <ClientSwitcher
+                clients={clients}
+                selectedClient={selectedClient}
+                onSelect={setSelectedClient}
+              />
             </div>
             <button
               onClick={() => setInfoPanelOpen(!infoPanelOpen)}
@@ -47,8 +66,8 @@ export default function ShowcaseView() {
               {infoPanelOpen ? 'Hide info ›' : '‹ Show info'}
             </button>
           </div>
-          <div className="flex-1 overflow-auto">
-            <BehindTheScenes />
+          <div className="flex-1 overflow-hidden">
+            <BehindTheScenes clientId={clientId} />
           </div>
         </div>
 
@@ -75,11 +94,11 @@ export default function ShowcaseView() {
 
             {/* Tab content */}
             <div className="flex-1 overflow-auto">
-              {activeTab === 'profile' && <ClientProfile />}
-              {activeTab === 'insurance' && <InsuranceCard />}
-              {activeTab === 'providers' && <ProviderList />}
-              {activeTab === 'appointments' && <AppointmentList />}
-              {activeTab === 'careplan' && <CarePlan />}
+              {activeTab === 'profile' && <ClientProfile clientId={clientId} />}
+              {activeTab === 'insurance' && <InsuranceCard clientId={clientId} />}
+              {activeTab === 'providers' && <ProviderList clientId={clientId} />}
+              {activeTab === 'appointments' && <AppointmentList clientId={clientId} />}
+              {activeTab === 'careplan' && <CarePlan clientId={clientId} />}
             </div>
           </div>
         )}

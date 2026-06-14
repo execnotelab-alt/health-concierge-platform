@@ -89,7 +89,7 @@ const PRIORITY_COLORS = {
   low: 'text-gray-500',
 }
 
-export default function ProviderList() {
+export default function ProviderList({ clientId }: { clientId?: string | null }) {
   return (
     <div className="p-4 space-y-3">
       <div className="text-xs text-gray-500">5 providers on file</div>

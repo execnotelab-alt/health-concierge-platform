@@ -1,21 +1,14 @@
-[2026-06-14T21:44:20.971Z] ═══════════════════════════════════════
-[2026-06-14T21:44:20.972Z]   Health Concierge Bridge Worker v1.0  
-[2026-06-14T21:44:20.972Z] ═══════════════════════════════════════
-[2026-06-14T21:44:20.972Z]   Gateway: http://127.0.0.1:18789
-[2026-06-14T21:44:20.972Z]   Supabase: https://rldvucpywemwqphiapyj.supabase.co
-[2026-06-14T21:44:20.972Z] ═══════════════════════════════════════
-[2026-06-14T21:44:20.972Z] Checking for pending messages to recover...
-[2026-06-14T21:44:21.220Z] No pending messages found.
-[2026-06-14T21:44:21.226Z] Bridge ready — listening for incoming messages...
-[2026-06-14T21:44:21.510Z] Realtime subscription: SUBSCRIBED
-[2026-06-14T21:46:19.074Z] Processing message bb77aaf7-5540-4956-80b9-16a2dea2c3e2 (client: 60bff668-1332-4b71-b21c-fd5127f849fb, source: client_chat)
-[2026-06-14T21:46:19.556Z] Inserted typing placeholder 29deaf0d-3dd7-4876-b985-63c7aad2d9cc, calling gateway...
-[2026-06-14T21:46:33.128Z] Stream complete: 333 chars
-[2026-06-14T21:46:33.514Z] ✓ Delivered response for message bb77aaf7-5540-4956-80b9-16a2dea2c3e2
-[2026-06-14T21:56:02.068Z] Processing message 87bce24c-1a42-4184-ae57-b29c7f72a518 (client: 60bff668-1332-4b71-b21c-fd5127f849fb, source: client_chat)
-[2026-06-14T21:56:02.525Z] Inserted typing placeholder ee153165-8c32-4707-b4f1-ebc9b00b5360, calling gateway...
-[2026-06-14T21:56:19.592Z] Stream complete: 324 chars
-[2026-06-14T21:56:19.979Z] ✓ Delivered response for message 87bce24c-1a42-4184-ae57-b29c7f72a518
-[2026-06-14T22:03:07.340Z] 
+[2026-06-14T22:42:33.341Z] ═══════════════════════════════════════
+[2026-06-14T22:42:33.342Z]   Health Concierge Bridge Worker v1.0  
+[2026-06-14T22:42:33.342Z] ═══════════════════════════════════════
+[2026-06-14T22:42:33.342Z]   Gateway: http://127.0.0.1:18789
+[2026-06-14T22:42:33.342Z]   Supabase: https://rldvucpywemwqphiapyj.supabase.co
+[2026-06-14T22:42:33.342Z]   Agent: openclaw/concierge (no tools)
+[2026-06-14T22:42:33.342Z] ═══════════════════════════════════════
+[2026-06-14T22:42:33.342Z] Checking for pending messages to recover...
+[2026-06-14T22:42:33.608Z] No pending messages found.
+[2026-06-14T22:42:33.613Z] Bridge ready — listening for incoming messages...
+[2026-06-14T22:42:34.005Z] Realtime subscription: SUBSCRIBED
+[2026-06-14T22:42:43.726Z] 
 Received SIGTERM. Shutting down gracefully...
-[2026-06-14T22:03:07.341Z] Realtime subscription: CLOSED
+[2026-06-14T22:42:43.727Z] Realtime subscription: CLOSED
